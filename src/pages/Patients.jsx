@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { describeAge } from '@vax/shared';
+import { describeAge } from '../../shared/index.js';
 import { useClinicData, useOnline, useSession } from '../hooks.js';
 import { api } from '../api.js';
 import { importPatientBundle } from '../repo.js';

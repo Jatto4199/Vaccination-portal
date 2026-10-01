@@ -24,7 +24,7 @@
 // never decide the order of changes.
 
 import { randomUUID } from 'node:crypto';
-import { SYNC_TABLES, normalizeName, todayISO, addDays } from '@vax/shared';
+import { SYNC_TABLES, normalizeName, todayISO, addDays } from '../shared/index.js';
 import { nextServerSeq, currentServerSeq, nowISO } from './db.js';
 import { regenerateSchedules } from './schedules.js';
 

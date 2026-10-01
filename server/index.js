@@ -8,7 +8,7 @@ import { config, getDb } from './runtime.js';
 import { runReminders } from './reminders.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const ENV_FILE = join(here, '../../.env');
+const ENV_FILE = join(here, '../.env');
 const PORT = Number(process.env.PORT ?? 4000);
 
 // The npm scripts load .env. On the first local run there is none yet, so one
@@ -34,7 +34,7 @@ await getDb();
 console.log(cfg.databaseUrl ? 'Using PostgreSQL from DATABASE_URL' : 'Using the embedded PostgreSQL database in server/data/pgdata');
 
 const app = createApp({
-  getDb, jwtSecret: process.env.JWT_SECRET, cronSecret: cfg.cronSecret, staticDir: join(here, '../../client/dist'),
+  getDb, jwtSecret: process.env.JWT_SECRET, cronSecret: cfg.cronSecret, staticDir: join(here, '../dist'),
 });
 app.listen(PORT, () => console.log(`Vaccination registry server on http://localhost:${PORT}`));
 

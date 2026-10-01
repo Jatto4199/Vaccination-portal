@@ -4,7 +4,7 @@
 // overdue vaccinations.
 
 import { randomUUID } from 'node:crypto';
-import { addDays, computeSchedule, todayISO, STATUS, DEFAULT_PASSWORD } from '@vax/shared';
+import { addDays, computeSchedule, todayISO, STATUS, DEFAULT_PASSWORD } from '../shared/index.js';
 import { hashPassword } from './auth.js';
 import { nowISO } from './db.js';
 import { serverCreate, serverAudit, flagDuplicates } from './sync.js';

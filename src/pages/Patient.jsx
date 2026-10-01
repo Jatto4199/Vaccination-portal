@@ -2,7 +2,7 @@
 // (thesis sections 3.7.1 and 3.16).
 import { useState } from 'react';
 import { Link, NavLink, useParams } from 'react-router-dom';
-import { describeAge, STATUS, todayISO, ACTIONABLE } from '@vax/shared';
+import { describeAge, STATUS, todayISO, ACTIONABLE } from '../../shared/index.js';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db.js';
 import { useClinicData, useSession } from '../hooks.js';

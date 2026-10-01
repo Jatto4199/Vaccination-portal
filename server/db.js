@@ -11,7 +11,7 @@
 
 import pg from 'pg';
 import { mkdirSync } from 'node:fs';
-import { DEFAULT_VACCINES, DEFAULT_SETTINGS } from '@vax/shared';
+import { DEFAULT_VACCINES, DEFAULT_SETTINGS } from '../shared/index.js';
 
 const DATE_OID = 1082;
 const TIMESTAMPTZ_OID = 1184;

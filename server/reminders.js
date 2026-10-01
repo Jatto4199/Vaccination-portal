@@ -14,7 +14,7 @@
 // that a dose was missed.
 
 import { randomUUID } from 'node:crypto';
-import { diffDays, todayISO } from '@vax/shared';
+import { diffDays, todayISO } from '../shared/index.js';
 import { getSettings, nowISO } from './db.js';
 import { regenerateSchedules } from './schedules.js';
 

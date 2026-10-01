@@ -1,6 +1,6 @@
 // Configuration received from the server (clinics, vaccines, settings) and
 // kept on the node for offline use.
-import { DEFAULT_SETTINGS } from '@vax/shared';
+import { DEFAULT_SETTINGS } from '../shared/index.js';
 import { api } from './api.js';
 import { db, getMeta, setMeta } from './db.js';
 

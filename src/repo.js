@@ -5,7 +5,7 @@
 //   3. adds an audit entry;
 // then regenerates the patient's vaccination schedule and asks for a sync.
 
-import { SYNC_TABLES, todayISO } from '@vax/shared';
+import { SYNC_TABLES, todayISO } from '../shared/index.js';
 import { db, uuid, getMeta, getNodeId, getDeviceId } from './db.js';
 import { getSession } from './auth.js';
 import { refreshSchedules } from './schedules.js';

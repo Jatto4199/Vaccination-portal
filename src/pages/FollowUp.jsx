@@ -1,7 +1,7 @@
 // Upcoming appointments page and Overdue vaccination page (sections 3.7.1, 3.16).
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { diffDays, STATUS, todayISO } from '@vax/shared';
+import { diffDays, STATUS, todayISO } from '../../shared/index.js';
 import { useClinicData } from '../hooks.js';
 import { fmtDate, vaccineLabel } from '../format.js';
 import { Empty, Loading } from '../components/ui.jsx';

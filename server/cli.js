@@ -37,6 +37,6 @@ if (command === 'reset' || command === 'seed') {
   log(`Regenerated schedules for ${await db.tx((q) => regenerateSchedules(q))} patients.`);
   await db.close();
 } else if (command !== 'reset') {
-  console.error('Usage: node src/cli.js <seed|reset --yes|refresh>');
+  console.error('Usage: node server/cli.js <seed|reset --yes|refresh>');
   process.exit(1);
 }

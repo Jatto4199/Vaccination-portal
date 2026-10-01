@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { openDatabase } from '../src/db.js';
-import { createApp } from '../src/app.js';
-import { seedDemoData } from '../src/seed.js';
-import { runReminders } from '../src/reminders.js';
-import { addDays, todayISO } from '@vax/shared';
+import { openDatabase } from '../db.js';
+import { createApp } from '../app.js';
+import { seedDemoData } from '../seed.js';
+import { runReminders } from '../reminders.js';
+import { addDays, todayISO } from '../../shared/index.js';
 
 const quietSender = { channel: 'sms', send: async () => ({ status: 'sent_simulated' }) };
 

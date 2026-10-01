@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DEFAULT_PASSWORD } from '@vax/shared';
+import { DEFAULT_PASSWORD } from '../../../shared/index.js';
 import { api } from '../../api.js';
 import { useSession } from '../../hooks.js';
 import { fmtDate } from '../../format.js';

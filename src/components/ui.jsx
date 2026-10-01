@@ -1,4 +1,4 @@
-import { STATUS_LABELS } from '@vax/shared';
+import { STATUS_LABELS } from '../../shared/index.js';
 
 export function StatusChip({ status }) {
   return <span className={`chip chip-${status}`}>{STATUS_LABELS[status] ?? status}</span>;

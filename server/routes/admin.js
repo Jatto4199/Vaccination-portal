@@ -2,7 +2,7 @@
 // (vaccines), synchronization settings, conflict review, audit trail, reminders.
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
-import { DEFAULT_SETTINGS } from '@vax/shared';
+import { DEFAULT_SETTINGS } from '../../shared/index.js';
 import { hashPassword, publicUser } from '../auth.js';
 import { getSettings, nowISO } from '../db.js';
 import { serverAudit, serverUpdate, getRecord } from '../sync.js';

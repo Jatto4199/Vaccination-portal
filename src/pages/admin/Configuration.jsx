@@ -1,7 +1,7 @@
 // System configuration (section 3.15.2): the vaccine schedule template and
 // synchronization / reminder settings. Nodes receive changes at their next sync.
 import { useEffect, useState } from 'react';
-import { DEFAULT_SETTINGS, SETTING_LABELS } from '@vax/shared';
+import { DEFAULT_SETTINGS, SETTING_LABELS } from '../../../shared/index.js';
 import { api } from '../../api.js';
 import { syncNow } from '../../sync.js';
 import { Alert, Field, Loading, Modal } from '../../components/ui.jsx';

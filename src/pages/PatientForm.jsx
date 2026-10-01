@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { normalizeName, todayISO } from '@vax/shared';
+import { normalizeName, todayISO } from '../../shared/index.js';
 import { db } from '../db.js';
 import { useClinicData } from '../hooks.js';
 import { registerPatient, updateRecord } from '../repo.js';

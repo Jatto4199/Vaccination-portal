@@ -2,7 +2,7 @@
 // Called after records change and daily, because statuses such as "overdue"
 // depend on the current date.
 
-import { computeSchedule, toScheduleRows, scheduleOptions, todayISO } from '@vax/shared';
+import { computeSchedule, toScheduleRows, scheduleOptions, todayISO } from '../shared/index.js';
 import { getSettings, nowISO } from './db.js';
 
 const COLUMNS = ['id', 'patient_id', 'vaccine_id', 'dose_number', 'expected_due_date', 'actual_administration_date',

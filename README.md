@@ -70,7 +70,7 @@ git push -u origin main
 
 ### 2. Create the Vercel project
 
-1. On vercel.com: **Add New → Project**, then import the GitHub repository. Leave the build settings as they are; `vercel.json` configures them.
+1. On vercel.com: **Add New → Project**, then import the GitHub repository. Vercel detects **Vite**; leave the root directory as `./` and the build settings as they are.
 2. **Add a database:** in the project, open **Storage → Create Database → Neon (Postgres)** and connect it to the project. This sets `DATABASE_URL` automatically.
 3. **Set environment variables** under **Settings → Environment Variables**:
 
@@ -90,7 +90,7 @@ DATABASE_URL="<neon connection string>" npm run db:seed
 ```
 
 **What runs where on Vercel:**
-- The web app is served as static files from `client/dist`.
+- The web app is served as static files from `dist`.
 - The API runs as one serverless function (`api/index.js`).
 - Vercel Cron calls `/api/cron/daily` every day at 06:00 UTC to refresh schedules and send SMS reminders.
 
@@ -102,28 +102,28 @@ DATABASE_URL="<neon connection string>" npm run db:seed
 
 | Module | Implementation |
 |---|---|
-| 1. User Management | `server/src/auth.js`, `server/src/routes/admin.js`, `client/src/pages/admin/Users.jsx` |
-| 2. Patient Registration | `client/src/pages/PatientForm.jsx`, `registerPatient()` in `client/src/repo.js` |
+| 1. User Management | `server/auth.js`, `server/routes/admin.js`, `src/pages/admin/Users.jsx` |
+| 2. Patient Registration | `src/pages/PatientForm.jsx`, `registerPatient()` in `src/repo.js` |
 | 3. Guardian Management | guardian section of the registration form; `guardians` table |
-| 4. Vaccination Management | `client/src/pages/Patient.jsx` (record, void), `vaccination_records` table |
+| 4. Vaccination Management | `src/pages/Patient.jsx` (record, void), `vaccination_records` table |
 | 5. Vaccination Scheduling Engine | `shared/schedule.js` (used on nodes and server), `shared/schedule-data.js` |
-| 6. Reminder and Notification | `client/src/schedules.js` + Notifications page (health workers); `server/src/reminders.js` (SMS to guardians) |
-| 7. Local Storage | `client/src/db.js` (IndexedDB via Dexie) |
-| 8. Synchronization | `client/src/sync.js` (node), `server/src/sync.js` (central server) |
-| 9. Conflict Resolution | `server/src/sync.js`, `client/src/pages/admin/Conflicts.jsx` |
-| 10. Reporting and Administrative | `client/src/pages/Reports.jsx`, `client/src/pages/admin/` |
+| 6. Reminder and Notification | `src/schedules.js` + Notifications page (health workers); `server/reminders.js` (SMS to guardians) |
+| 7. Local Storage | `src/db.js` (IndexedDB via Dexie) |
+| 8. Synchronization | `src/sync.js` (node), `server/sync.js` (central server) |
+| 9. Conflict Resolution | `server/sync.js`, `src/pages/admin/Conflicts.jsx` |
+| 10. Reporting and Administrative | `src/pages/Reports.jsx`, `src/pages/admin/` |
 
 ### 3.7 Architecture layers
 
-- **Presentation layer** (3.7.1): `client/src/pages/`. It has the login page, dashboard, patient registration, patient search, vaccination history, vaccination schedule, upcoming, overdue, notifications and administration screens.
+- **Presentation layer** (3.7.1): `src/pages/`. It has the login page, dashboard, patient registration, patient search, vaccination history, vaccination schedule, upcoming, overdue, notifications and administration screens.
 - **Application layer** (3.7.2):
   - `shared/` holds the business rules: scheduling, statuses and conflict-relevant field definitions.
-  - `client/src/repo.js`, `schedules.js` and `sync.js` handle node-side processing.
-  - `server/src/` handles authorization, synchronization and conflict processing.
+  - `src/repo.js`, `schedules.js` and `sync.js` handle node-side processing.
+  - `server/` handles authorization, synchronization and conflict processing.
 - **Local data layer** (3.7.3): IndexedDB on each node. Every change is saved locally first.
-- **Synchronization layer** (3.7.4): push/pull protocol between `client/src/sync.js` and `server/src/sync.js`. It covers change detection, packaging, transmission, receiving, conflict detection and resolution, confirmation, and retry with increasing delays.
+- **Synchronization layer** (3.7.4): push/pull protocol between `src/sync.js` and `server/sync.js`. It covers change detection, packaging, transmission, receiving, conflict detection and resolution, confirmation, and retry with increasing delays.
 
-### 3.12 Database entities (`server/src/db.js`)
+### 3.12 Database entities (`server/db.js`)
 
 | Entity | Table | Notes |
 |---|---|---|
@@ -154,7 +154,7 @@ Supporting tables:
 | 15 | Store records locally when offline | IndexedDB; PWA service worker for the app itself |
 | 16 | Detect network availability | `isServerReachable()` checks the server answers, not just Wi-Fi |
 | 17 | Synchronize when connectivity is restored | Sync on reconnect, every minute, after each change; retry with backoff |
-| 18–19 | Detect conflicts; apply conflict rules | Version comparison and field-level merge in `server/src/sync.js` |
+| 18–19 | Detect conflicts; apply conflict rules | Version comparison and field-level merge in `server/sync.js` |
 | 20 | Audit trail | `audit_log` (logins, patient and vaccination changes, sync, admin actions) |
 | 21 | Search patient records | Patient search (local), plus "Search all clinics" when online |
 | 22 | Administrative and vaccination reports | Reports page, admin Clinics, Sync log and Audit log |
@@ -192,17 +192,20 @@ Supporting tables:
 
 - **Peer-to-peer sync** between clinics is not implemented (see above).
 - **Local data is not encrypted at rest.** On-device records are protected by login, session expiry and idle logout. Encrypting IndexedDB is future work.
-- **SMS is simulated.** Messages are logged by the server. To use a gateway such as Africa's Talking or Termii, replace `send()` in `server/src/reminders.js`.
+- **SMS is simulated.** Messages are logged by the server. To use a gateway such as Africa's Talking or Termii, replace `send()` in `server/reminders.js`.
 - **Verify the schedule template.** `shared/schedule-data.js` follows the commonly published Nigerian routine immunization schedule and **must be checked against the current official NPHCDA schedule** before real use. Administrators can edit it under Configuration.
 - **Data held on each node:** a node stores its own clinic's patients plus visiting patients it has served or added through "Search all clinics".
 
 ## Project structure
 
+One package, one install, one build. Vercel detects it as a single Vite app with an API function.
+
 ```
-shared/        scheduling engine, vaccine template, settings, sync table definitions (+ tests)
-server/src/    Express API, PostgreSQL schema, sync protocol, schedules, reminders, demo seeder
-server/test/   end-to-end tests of the API and sync protocol
-client/src/    React PWA: IndexedDB, sync engine, schedules, screens
-api/index.js   Vercel serverless entry point
-vercel.json    Vercel build, routing and cron configuration
+index.html, src/   React PWA: IndexedDB, sync engine, schedules, screens
+public/            static files (app icon)
+server/            Express API, PostgreSQL schema, sync protocol, schedules, reminders, demo seeder
+server/test/       end-to-end tests of the API and sync protocol
+shared/            scheduling engine, vaccine template, settings, sync table definitions (+ tests)
+api/index.js       Vercel serverless entry point (runs the Express app)
+vercel.json        Vercel routing, function and cron configuration
 ```

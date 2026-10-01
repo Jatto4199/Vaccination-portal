@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { STATUS } from '@vax/shared';
+import { STATUS } from '../../shared/index.js';
 import { useClinicData, useOnline, usePendingCount, useSession, useSyncState } from '../hooks.js';
 import { syncNow } from '../sync.js';
 import { fmtDate, timeAgo, vaccineLabel } from '../format.js';

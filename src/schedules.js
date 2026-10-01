@@ -8,7 +8,7 @@
 // dose becomes upcoming, due or overdue, a notification is created for the
 // health workers on this node.
 
-import { computeSchedule, toScheduleRows, scheduleOptions, todayISO, ACTIONABLE, STATUS_LABELS, describeAge } from '@vax/shared';
+import { computeSchedule, toScheduleRows, scheduleOptions, todayISO, ACTIONABLE, STATUS_LABELS, describeAge } from '../shared/index.js';
 import { db, getMeta, setMeta } from './db.js';
 import { getSettings } from './config.js';
 

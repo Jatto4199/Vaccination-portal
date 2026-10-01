@@ -1,7 +1,7 @@
 // Reporting Module (section 3.6.1, requirement 22). Calculated on the node from
 // local records, so reports also work offline.
 import { useMemo, useState } from 'react';
-import { addPeriod, todayISO, STATUS, STATUS_LABELS } from '@vax/shared';
+import { addPeriod, todayISO, STATUS, STATUS_LABELS } from '../../shared/index.js';
 import { useClinicData } from '../hooks.js';
 import { vaccineName } from '../format.js';
 import { Empty, Loading } from '../components/ui.jsx';

@@ -5,7 +5,7 @@ import { openDatabase } from './db.js';
 import { seedDemoData } from './seed.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-export const LOCAL_DATA_DIR = join(here, '../data/pgdata');
+export const LOCAL_DATA_DIR = join(here, 'data/pgdata');
 
 export function config() {
   const onVercel = Boolean(process.env.VERCEL);
