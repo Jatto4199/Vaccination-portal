@@ -4,7 +4,7 @@
 // overdue vaccinations.
 
 import { randomUUID } from 'node:crypto';
-import { addDays, computeSchedule, todayISO, STATUS } from '@vax/shared';
+import { addDays, computeSchedule, todayISO, STATUS, DEFAULT_PASSWORD } from '@vax/shared';
 import { hashPassword } from './auth.js';
 import { nowISO } from './db.js';
 import { serverCreate, serverAudit, flagDuplicates } from './sync.js';
@@ -84,8 +84,8 @@ function simulateHistory(patient, vaccines, today, { delayFor, maxVisits, firstV
 
 export async function seedDemoData(db, {
   today = todayISO(),
-  adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'admin123',
-  staffPassword = process.env.SEED_STAFF_PASSWORD ?? 'password123',
+  adminPassword = process.env.SEED_ADMIN_PASSWORD || DEFAULT_PASSWORD,
+  staffPassword = process.env.SEED_STAFF_PASSWORD || DEFAULT_PASSWORD,
   log = () => {},
 } = {}) {
   if ((await db.one('SELECT COUNT(*)::int AS n FROM users')).n > 0) return false;

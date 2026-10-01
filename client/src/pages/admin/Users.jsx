@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { DEFAULT_PASSWORD } from '@vax/shared';
 import { api } from '../../api.js';
 import { useSession } from '../../hooks.js';
 import { fmtDate } from '../../format.js';
@@ -6,7 +7,7 @@ import { Alert, Field, Loading, Modal } from '../../components/ui.jsx';
 import { useRemote } from './useRemote.js';
 
 const ROLE_LABELS = { health_worker: 'Health worker', admin: 'Administrator' };
-const blank = { full_name: '', username: '', email: '', password: '', role: 'health_worker', clinic_id: '' };
+const blank = { full_name: '', username: '', email: '', password: DEFAULT_PASSWORD, role: 'health_worker', clinic_id: '' };
 
 function UserForm({ clinics, onDone }) {
   const [form, setForm] = useState(blank);
@@ -30,7 +31,7 @@ function UserForm({ clinics, onDone }) {
         <Field label="Full name"><input value={form.full_name} onChange={set('full_name')} autoFocus /></Field>
         <Field label="Username"><input value={form.username} onChange={set('username')} autoCapitalize="none" /></Field>
         <Field label="Email (optional)" hint="Can also be used to log in"><input type="email" value={form.email} onChange={set('email')} /></Field>
-        <Field label="Temporary password" hint="At least 8 characters"><input type="password" value={form.password} onChange={set('password')} /></Field>
+        <Field label="Temporary password" hint={`Default ${DEFAULT_PASSWORD}; at least 8 characters`}><input value={form.password} onChange={set('password')} /></Field>
         <Field label="Role">
           <select value={form.role} onChange={set('role')}>
             <option value="health_worker">Health worker</option>
@@ -70,7 +71,7 @@ export default function Users() {
   }
 
   async function resetPassword(user) {
-    const password = window.prompt(`New temporary password for ${user.full_name} (at least 8 characters):`);
+    const password = window.prompt(`New temporary password for ${user.full_name} (at least 8 characters):`, DEFAULT_PASSWORD);
     if (password) await update(user, { password });
   }
 

@@ -69,10 +69,10 @@ test('central server', async (t) => {
   const env = await startServer();
   t.after(async () => { env.server.close(); await env.db.close(); });
   const [clinicA, clinicB] = env.clinics;
-  const nurseA = await node(env, 'nurse1', 'password123');
-  const nurseA2 = await node(env, 'chew1', 'password123'); // second health worker at clinic A
-  const nurseB = await node(env, 'nurse2', 'password123');
-  const admin = await node(env, 'admin', 'admin123');
+  const nurseA = await node(env, 'nurse1', '1234567890');
+  const nurseA2 = await node(env, 'chew1', '1234567890'); // second health worker at clinic A
+  const nurseB = await node(env, 'nurse2', '1234567890');
+  const admin = await node(env, 'admin', '1234567890');
 
   await t.test('demo data has patients with due, upcoming and overdue doses', async () => {
     const counts = Object.fromEntries((await env.db.query(
@@ -87,7 +87,7 @@ test('central server', async (t) => {
     const bad = await fetch(`${env.base}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ username: 'nurse1', password: 'nope' }) });
     assert.equal(bad.status, 401);
-    const byEmail = await node(env, 'NURSE1@example.org', 'password123');
+    const byEmail = await node(env, 'NURSE1@example.org', '1234567890');
     assert.equal(byEmail.user.username, 'nurse1');
   });
 

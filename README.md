@@ -20,12 +20,14 @@ Open http://localhost:5173. On the first run the server:
 
 ### Demo accounts
 
-| Username | Password | Role | Clinic |
-|---|---|---|---|
-| `admin` | `admin123` | Administrator | All clinics |
-| `nurse1`, `chew1` | `password123` | Health worker | CLN01 Iloro PHC |
-| `nurse2`, `chew2` | `password123` | Health worker | CLN02 Oke-Ode PHC |
-| `nurse3`, `chew3` | `password123` | Health worker | CLN03 Ajasse PHC |
+All demo accounts use the password **`1234567890`**. It is also the default temporary password for new users and password resets.
+
+| Username | Role | Clinic |
+|---|---|---|
+| `admin` | Administrator | All clinics |
+| `nurse1`, `chew1` | Health worker | CLN01 Iloro PHC |
+| `nurse2`, `chew2` | Health worker | CLN02 Oke-Ode PHC |
+| `nurse3`, `chew3` | Health worker | CLN03 Ajasse PHC |
 
 You can also log in with the email address, for example `nurse1@example.org`.
 
@@ -77,7 +79,7 @@ git push -u origin main
 | `JWT_SECRET` | output of `openssl rand -hex 32` |
 | `CRON_SECRET` | output of `openssl rand -hex 32` (protects the daily reminder job) |
 | `SEED_DEMO_DATA` | `true` for a demo deployment (fills the empty database on first request); leave unset for real use |
-| `SEED_ADMIN_PASSWORD`, `SEED_STAFF_PASSWORD` | optional: replace the public demo passwords |
+| `SEED_ADMIN_PASSWORD`, `SEED_STAFF_PASSWORD` | optional: passwords for the demo accounts instead of the default `1234567890` |
 
 4. **Deploy** (or redeploy after adding the variables). Open the site and log in.
 
@@ -92,7 +94,7 @@ DATABASE_URL="<neon connection string>" npm run db:seed
 - The API runs as one serverless function (`api/index.js`).
 - Vercel Cron calls `/api/cron/daily` every day at 06:00 UTC to refresh schedules and send SMS reminders.
 
-> **Security note:** with `SEED_DEMO_DATA=true` and the default passwords, anyone who has read this README can log in to your deployment. That's fine for a demo with fictional data. Set `SEED_ADMIN_PASSWORD` and `SEED_STAFF_PASSWORD` before sharing the link, and never use the demo accounts for real patients.
+> **Security note:** every account starts with the password `1234567890`, so anyone who has read this README can log in to your deployment, including as `admin`. That's fine for a demo with fictional data. Before using it with real patients, give every account its own password (admin → Users → Reset password).
 
 ## How the implementation maps to Chapter 3
 

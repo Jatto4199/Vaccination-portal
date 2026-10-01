@@ -1,3 +1,6 @@
+// Default (temporary) password for demo accounts, new users and password resets.
+export const DEFAULT_PASSWORD = '1234567890';
+
 // System and synchronization settings managed by administrators
 // (thesis section 3.15.2). Nodes receive them with the configuration on sync.
 export const DEFAULT_SETTINGS = {
