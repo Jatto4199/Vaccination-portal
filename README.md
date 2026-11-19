@@ -20,7 +20,7 @@ Open http://localhost:5173. On the first run the server:
 
 ### Demo accounts
 
-All demo accounts use the password **`1234567890`**. It is also the default temporary password for new users and password resets.
+All demo accounts use the password **`1234567890`**. It is also the default temporary password for new users and password resets. Accounts created or reset by an administrator must choose their own password at the next login. The demo accounts are exempt so the credentials above keep working. Any user can change their password with **Change password** in the top bar.
 
 | Username | Role | Clinic |
 |---|---|---|
@@ -157,7 +157,7 @@ Supporting tables:
 | 18–19 | Detect conflicts; apply conflict rules | Version comparison and field-level merge in `server/sync.js` |
 | 20 | Audit trail | `audit_log` (logins, patient and vaccination changes, sync, admin actions) |
 | 21 | Search patient records | Patient search (local), plus "Search all clinics" when online |
-| 22 | Administrative and vaccination reports | Reports page, admin Clinics, Sync log and Audit log |
+| 22 | Administrative and vaccination reports | Reports page (monthly activity, coverage, dropout rates, CSV export, per-clinic filter for administrators), Overdue/Upcoming CSV export, admin Clinics, Sync log and Audit log |
 
 ### 3.14 Conflict rules
 
@@ -174,11 +174,18 @@ Supporting tables:
 
 | Requirement | Implementation |
 |---|---|
-| Authentication | Hashed passwords (scrypt on the server, PBKDF2 for offline login on the node) |
+| Authentication | Hashed passwords (scrypt on the server, PBKDF2 for offline login on the node). Temporary passwords must be changed at first login. After 5 failed logins in a row the account is locked for 15 minutes. Changing or resetting a password invalidates earlier login tokens |
 | Role-based access | Health worker and administrator roles, enforced by the server |
 | Secure communication | HTTPS (provided by Vercel) |
-| Auditability | Every action listed in 3.15.4 is logged |
+| Auditability | Every action listed in 3.15.4 is logged, including searches of other clinics' patients and downloads of their records |
 | Session management | Sessions end when the app is closed and after inactivity (configurable); offline login expires after a configurable number of days |
+
+### Patient follow-up
+
+- **Patient status.** On the patient profile, **Change status** marks a patient as moved away, lost to follow-up or deceased. Their outstanding doses become "Not followed up". They leave the due, upcoming and overdue lists, and no SMS reminders are sent. Their history is kept, and they can be set back to active.
+- **Transfer.** An administrator can move a patient to another clinic from the patient profile (**Transfer to another clinic**, online). The receiving clinic gets the patient, guardian and history at its next sync. Each clinic follows up only its own patients; patients from other clinics stay viewable.
+- **Doses given elsewhere.** When recording a dose, tick **Given at another facility** to copy a dose from the child health card. It counts towards the schedule and coverage, but not towards the clinic's "doses given" in the monthly report.
+- **New vaccines.** Administrators can add vaccine doses under Configuration → **Add vaccine** (e.g. a new national introduction). Patients are either children or mothers, so adolescent programmes such as HPV for girls aged 9–14 cannot yet be targeted precisely.
 
 ## Design decisions to explain in the thesis
 
@@ -191,6 +198,8 @@ Supporting tables:
 ## Limitations and future work
 
 - **Peer-to-peer sync** between clinics is not implemented (see above).
+- **Logging out does not revoke the login token on the server.** It expires after 7 days, or as soon as the password is changed or reset.
+- **Adverse events following immunization (AEFI)** are not recorded.
 - **Local data is not encrypted at rest.** On-device records are protected by login, session expiry and idle logout. Encrypting IndexedDB is future work.
 - **SMS is simulated.** Messages are logged by the server. To use a gateway such as Africa's Talking or Termii, replace `send()` in `server/reminders.js`.
 - **Verify the schedule template.** `shared/schedule-data.js` follows the commonly published Nigerian routine immunization schedule and **must be checked against the current official NPHCDA schedule** before real use. Administrators can edit it under Configuration.

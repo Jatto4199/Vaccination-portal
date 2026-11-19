@@ -24,7 +24,7 @@
 // never decide the order of changes.
 
 import { randomUUID } from 'node:crypto';
-import { SYNC_TABLES, normalizeName, todayISO, addDays } from '../shared/index.js';
+import { SYNC_TABLES, PATIENT_STATUSES, normalizeName, todayISO, addDays } from '../shared/index.js';
 import { nextServerSeq, currentServerSeq, nowISO } from './db.js';
 import { regenerateSchedules } from './schedules.js';
 
@@ -104,6 +104,8 @@ async function validate(q, table, data, existing, user) {
   if (table === 'patients') {
     if (data.type === 'child' && !data.dob) throw new Rejected('Date of birth is required for a child');
     if (data.dob && !ISO_DATE.test(data.dob)) throw new Rejected('Invalid date of birth');
+    if (data.status && !PATIENT_STATUSES[data.status]) throw new Rejected(`Unknown patient status ${data.status}`);
+    if (data.status_date && !ISO_DATE.test(data.status_date)) throw new Rejected('Invalid status date');
     if (!existing) {
       const taken = await q.one('SELECT 1 FROM patients WHERE patient_number = $1', [data.patient_number]);
       if (taken) throw new Rejected(`Patient number ${data.patient_number} is already in use`);

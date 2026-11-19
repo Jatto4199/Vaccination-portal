@@ -124,6 +124,18 @@ export async function login(rawLogin, password) {
   return session;
 }
 
+// Changes the user's own password (online only). The server returns a new
+// token because tokens issued before the change stop working; the offline
+// login credential is replaced too.
+export async function changePassword(currentPassword, newPassword) {
+  const { token, user } = await api('/auth/password', {
+    method: 'POST', body: { current_password: currentPassword, new_password: newPassword },
+  });
+  setToken(token);
+  await rememberCredential(user.username, newPassword, user, token);
+  setSession({ token, user, offline: false });
+}
+
 export async function logout(reason = 'auth.logout') {
   if (session?.user) await auditLocal(session.user, reason);
   setSession(null);

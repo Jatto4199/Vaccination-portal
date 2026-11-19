@@ -53,11 +53,56 @@ function UserForm({ clinics, onDone }) {
   );
 }
 
+function EditUser({ user, clinics, isSelf, onDone }) {
+  const [form, setForm] = useState({
+    full_name: user.full_name, email: user.email ?? '', role: user.role, clinic_id: user.clinic_id ?? '',
+  });
+  const [error, setError] = useState(null);
+  const set = (f) => (e) => setForm({ ...form, [f]: e.target.value });
+
+  async function submit(e) {
+    e.preventDefault();
+    try {
+      await api(`/admin/users/${user.id}`, { method: 'PATCH', body: form });
+      onDone();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <Modal title={`Edit ${user.username}`} onClose={onDone}>
+      <form className="stack" onSubmit={submit}>
+        {error && <Alert kind="error">{error}</Alert>}
+        <Field label="Full name"><input value={form.full_name} onChange={set('full_name')} autoFocus /></Field>
+        <Field label="Email (optional)"><input type="email" value={form.email} onChange={set('email')} /></Field>
+        <Field label="Role" hint={isSelf ? 'You cannot change your own role' : undefined}>
+          <select value={form.role} onChange={set('role')} disabled={isSelf}>
+            <option value="health_worker">Health worker</option>
+            <option value="admin">Administrator</option>
+          </select>
+        </Field>
+        <Field label="Clinic" hint="Changing the clinic takes effect at the user's next online login">
+          <select value={form.clinic_id} onChange={set('clinic_id')}>
+            <option value="">{form.role === 'admin' ? 'All clinics' : 'Select…'}</option>
+            {clinics.map((c) => <option key={c.id} value={c.id}>{c.code} · {c.name}</option>)}
+          </select>
+        </Field>
+        <div className="actions">
+          <button type="button" className="btn" onClick={onDone}>Cancel</button>
+          <button className="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export default function Users() {
   const users = useRemote('/admin/users');
   const clinics = useRemote('/admin/clinics');
   const { user: me } = useSession();
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [error, setError] = useState(null);
 
   async function update(user, patch, confirmText) {
@@ -71,7 +116,7 @@ export default function Users() {
   }
 
   async function resetPassword(user) {
-    const password = window.prompt(`New temporary password for ${user.full_name} (at least 8 characters):`, DEFAULT_PASSWORD);
+    const password = window.prompt(`New temporary password for ${user.full_name} (at least 8 characters). They must change it when they next log in:`, DEFAULT_PASSWORD);
     if (password) await update(user, { password });
   }
 
@@ -95,9 +140,10 @@ export default function Users() {
                 <td><span className="mono">{u.username}</span>{u.email && <div className="muted small">{u.email}</div>}</td>
                 <td>{ROLE_LABELS[u.role]}</td>
                 <td>{u.clinic_name ?? 'All clinics'}</td>
-                <td>{u.account_status}</td>
+                <td>{u.account_status}{u.must_change_password && <div className="muted small">temporary password</div>}</td>
                 <td>{fmtDate(u.date_created)}</td>
                 <td className="row-actions">
+                  <button className="btn-link" onClick={() => setEditing(u)}>Edit</button>
                   <button className="btn-link" onClick={() => resetPassword(u)}>Reset password</button>
                   {u.id !== me.id && (u.account_status === 'active'
                     ? <button className="btn-link danger" onClick={() => update(u, { account_status: 'disabled' }, `Disable ${u.full_name}? They will be signed out at their next sync.`)}>Disable</button>
@@ -108,6 +154,7 @@ export default function Users() {
           </tbody>
         </table>
       </section>
+      {editing && <EditUser user={editing} clinics={clinics.data.clinics} isSelf={editing.id === me.id} onDone={() => { setEditing(null); users.reload(); }} />}
       {creating && <UserForm clinics={clinics.data.clinics} onDone={() => { setCreating(false); users.reload(); }} />}
     </div>
   );

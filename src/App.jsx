@@ -12,6 +12,7 @@ import FollowUp from './pages/FollowUp.jsx';
 import Notifications from './pages/Notifications.jsx';
 import Reports from './pages/Reports.jsx';
 import SyncStatus from './pages/SyncStatus.jsx';
+import ChangePassword from './pages/ChangePassword.jsx';
 import Users from './pages/admin/Users.jsx';
 import Clinics from './pages/admin/Clinics.jsx';
 import Configuration from './pages/admin/Configuration.jsx';
@@ -28,6 +29,9 @@ export default function App() {
   }, [session]);
 
   if (!session) return <Login />;
+  if (session.user.must_change_password) {
+    return <BrowserRouter><div className="login-page"><ChangePassword forced /></div></BrowserRouter>;
+  }
   const isAdmin = session.user.role === 'admin';
 
   return (
@@ -46,6 +50,7 @@ export default function App() {
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/sync" element={<SyncStatus />} />
+          <Route path="/account/password" element={<ChangePassword />} />
           {isAdmin && (
             <>
               <Route path="/admin/users" element={<Users />} />

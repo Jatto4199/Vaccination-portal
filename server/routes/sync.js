@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { pushChanges, pullChanges, getRecord } from '../sync.js';
+import { pushChanges, pullChanges, getRecord, serverAudit } from '../sync.js';
 import { getSettings } from '../db.js';
 
 const MAX_BATCH = 200;
@@ -46,6 +46,10 @@ export function syncRoutes() {
       WHERE p.merged_into_id IS NULL
         AND (p.full_name ILIKE $1 OR p.patient_number ILIKE $1 OR g.phone ILIKE $1 OR g.full_name ILIKE $1)
       ORDER BY p.full_name LIMIT 20`, [like]);
+    // Searching other clinics' records is logged in the audit trail.
+    await req.db.tx((tx) => serverAudit(tx, {
+      user: req.user, action: 'patients.search_all_clinics', nodeId: req.nodeId, detail: { query: q, results: results.length },
+    }));
     res.json({ results });
   });
 
@@ -56,6 +60,10 @@ export function syncRoutes() {
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
     const guardian = patient.guardian_id ? await getRecord(req.db, 'guardians', patient.guardian_id) : null;
     const records = await req.db.query('SELECT * FROM vaccination_records WHERE patient_id = $1', [patient.id]);
+    await req.db.tx((tx) => serverAudit(tx, {
+      user: req.user, action: 'patients.downloaded', entity: 'patients', entityId: patient.id, nodeId: req.nodeId,
+      detail: { clinic_id: patient.clinic_id },
+    }));
     res.json({ patient, guardian, records });
   });
 

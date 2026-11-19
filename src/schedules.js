@@ -8,9 +8,18 @@
 // dose becomes upcoming, due or overdue, a notification is created for the
 // health workers on this node.
 
-import { computeSchedule, toScheduleRows, scheduleOptions, todayISO, ACTIONABLE, STATUS_LABELS, describeAge } from '../shared/index.js';
+import { computeSchedule, toScheduleRows, scheduleOptions, todayISO, ACTIONABLE, STATUS_LABELS, describeAge, isActivePatient } from '../shared/index.js';
 import { db, getMeta, setMeta } from './db.js';
 import { getSettings } from './config.js';
+import { getSession } from './auth.js';
+
+// A clinic follows up its own active patients. Visiting patients and patients
+// transferred to another clinic stay viewable but are followed up by their
+// own clinic. Administrators see every clinic.
+export function isFollowedUpHere(patient, user) {
+  if (patient.merged_into_id || !isActivePatient(patient)) return false;
+  return !user?.clinic_id || patient.clinic_id === user.clinic_id;
+}
 
 const MESSAGES = {
   upcoming: (p, v, row) => `${p.full_name} is due for ${v} on ${row.expected_due_date}.`,
@@ -35,12 +44,14 @@ export async function refreshSchedules(patientIds = null) {
 
   await db.transaction('rw', db.vaccination_schedules, db.notifications, async () => {
     await db.vaccination_schedules.where('patient_id').anyOf(ids).delete();
+    const user = getSession()?.user;
     for (const patient of patients) {
       if (patient.merged_into_id) continue;
       const rows = toScheduleRows(computeSchedule(patient, byPatient.get(patient.id) ?? [], vaccines, options), now);
       await db.vaccination_schedules.bulkPut(rows);
+      const followUp = isFollowedUpHere(patient, user);
       for (const row of rows) {
-        if (ACTIONABLE.includes(row.status)) {
+        if (followUp && ACTIONABLE.includes(row.status)) {
           const id = `${row.id}:${row.status}`;
           if (!(await db.notifications.get(id))) {
             await db.notifications.add({
@@ -49,8 +60,9 @@ export async function refreshSchedules(patientIds = null) {
               detail: patient.dob ? `Age ${describeAge(patient.dob, today)}` : null, created_at: now, read: 0,
             });
           }
-        } else if (row.status === 'completed') {
-          // Unread reminders for a dose that has now been given are no longer needed.
+        } else if (row.status === 'completed' || !followUp) {
+          // Unread reminders for a dose that has now been given, or for a patient
+          // no longer followed up here, are no longer needed.
           await db.notifications.where('schedule_id').equals(row.id).filter((n) => !n.read).delete();
         }
       }

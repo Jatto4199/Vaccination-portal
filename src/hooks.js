@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, pendingCount } from './db.js';
 import { getSession, subscribeSession } from './auth.js';
+import { isFollowedUpHere } from './schedules.js';
 import { getSyncState, subscribeSync } from './sync.js';
 
 export const useSession = () => useSyncExternalStore(subscribeSession, getSession);
@@ -29,6 +30,8 @@ export function useClinicData() {
       vaccineList: vaccines,
       clinics: new Map(clinics.map((c) => [c.id, c])),
       unsynced: new Set(pending.map((s) => s.record_id)),
+      // Patients this device follows up (due/overdue lists, dashboard).
+      followUp: new Set(patients.filter((p) => isFollowedUpHere(p, getSession()?.user)).map((p) => p.id)),
     };
   });
 }

@@ -255,6 +255,95 @@ test('central server', async (t) => {
     assert.ok(!phones.includes('08099990002'));
   });
 
+  await t.test('new users must change the temporary password; the old token stops working', async () => {
+    const created = await admin.send('POST', '/admin/users', {
+      full_name: 'New Nurse', username: 'newnurse', password: '1234567890', role: 'health_worker', clinic_id: clinicA.id,
+    });
+    assert.equal(created.status, 201);
+    const fresh = await node(env, 'newnurse', '1234567890');
+    assert.equal(fresh.user.must_change_password, true);
+    assert.equal((await fresh.send('POST', '/auth/password', { current_password: '1234567890', new_password: '1234567890' })).status, 400);
+    assert.equal((await fresh.send('POST', '/auth/password', { current_password: 'wrong', new_password: 'clinic-pass-1' })).status, 400);
+    await new Promise((r) => setTimeout(r, 1100)); // token iat has 1-second resolution
+    const changed = await fresh.send('POST', '/auth/password', { current_password: '1234567890', new_password: 'clinic-pass-1' });
+    assert.equal(changed.status, 200);
+    assert.equal(changed.body.user.must_change_password, false);
+    assert.equal((await fresh.send('GET', '/config')).status, 401, 'token from before the change is rejected');
+    const again = await node(env, 'newnurse', 'clinic-pass-1');
+    assert.equal(again.user.must_change_password, false);
+  });
+
+  await t.test('an account is locked after repeated failed logins', async () => {
+    await admin.send('POST', '/admin/users', {
+      full_name: 'Lock Test', username: 'locktest', password: '1234567890', role: 'health_worker', clinic_id: clinicA.id,
+    });
+    const attempt = (password) => fetch(`${env.base}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'locktest', password }) }).then((r) => r.status);
+    for (let i = 0; i < 4; i++) assert.equal(await attempt('wrong'), 401);
+    assert.equal(await attempt('wrong'), 429);
+    assert.equal(await attempt('1234567890'), 429, 'locked even with the right password');
+    const user = await env.db.one("SELECT id FROM users WHERE username = 'locktest'");
+    await admin.send('PATCH', `/admin/users/${user.id}`, { password: '1234567890' }); // a reset unlocks
+    assert.equal(await attempt('1234567890'), 200);
+  });
+
+  await t.test('an inactive patient is not followed up and gets no reminders', async () => {
+    const today = todayISO();
+    const guardian = { id: randomUUID(), full_name: 'Zainab Ali', phone: '08099990003', relationship: 'Mother',
+      sms_consent: true, preferred_notification: 'sms', clinic_id: clinicA.id };
+    const patient = childRecord(clinicA.id, { dob: addDays(today, -42), registration_date: today, guardian_id: guardian.id });
+    const [, created] = await nurseA.push([create('guardians', guardian), create('patients', patient)]);
+    const [moved] = await nurseA.push([update('patients', { ...patient, status: 'deceased', status_date: today },
+      created.record.version, ['status', 'status_date'])]);
+    assert.equal(moved.status, 'applied');
+    const statuses = (await env.db.query('SELECT DISTINCT status FROM vaccination_schedules WHERE patient_id = $1', [patient.id])).map((r) => r.status);
+    assert.deepEqual(statuses, ['inactive']);
+    await runReminders(env.db, { today, sender: quietSender });
+    assert.equal((await env.db.one('SELECT COUNT(*)::int AS n FROM notifications WHERE patient_id = $1', [patient.id])).n, 0);
+    const [bad] = await nurseA.push([update('patients', { ...patient, status: 'gone' }, moved.record.version, ['status'])]);
+    assert.equal(bad.status, 'rejected');
+  });
+
+  await t.test('a dose given elsewhere is stored with its facility', async () => {
+    const patient = childRecord(clinicA.id);
+    const record = dose(patient.id, clinicA.id, 'BCG-1', '2026-01-12', { given_elsewhere: true, facility_name: 'General Hospital' });
+    const [, result] = await nurseA.push([create('patients', patient), create('vaccination_records', record)]);
+    assert.equal(result.record.given_elsewhere, true);
+    assert.equal(result.record.facility_name, 'General Hospital');
+  });
+
+  await t.test('an administrator transfers a patient and the new clinic receives the full history', async () => {
+    const guardian = { id: randomUUID(), full_name: 'Folake Ade', phone: '08099990004', relationship: 'Mother', sms_consent: false, clinic_id: clinicA.id };
+    const patient = childRecord(clinicA.id, { guardian_id: guardian.id });
+    const record = dose(patient.id, clinicA.id, 'BCG-1', '2026-01-10');
+    await nurseA.push([create('guardians', guardian), create('patients', patient), create('vaccination_records', record)]);
+    const since = (await nurseB.pull(0)).last_seq;
+    assert.equal((await nurseA.send('POST', `/admin/patients/${patient.id}/transfer`, { clinic_id: clinicB.id })).status, 403);
+    assert.equal((await admin.send('POST', `/admin/patients/${patient.id}/transfer`, { clinic_id: clinicB.id })).status, 200);
+    const ids = (await nurseB.pull(since)).changes.map((c) => c.record.id);
+    for (const id of [patient.id, guardian.id, record.id]) assert.ok(ids.includes(id));
+  });
+
+  await t.test('administrators add vaccines and edit users', async () => {
+    const res = await admin.send('POST', '/admin/vaccines', {
+      code: 'hpv', name: 'Human Papillomavirus', dose_number: 1, target: 'child', recommended_age: '9y',
+    });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.id, 'HPV-1');
+    assert.ok((await nurseA.get('/config')).vaccines.some((v) => v.id === 'HPV-1'));
+    assert.equal((await admin.send('POST', '/admin/vaccines', { code: 'HPV', name: 'x', dose_number: 1, target: 'child', recommended_age: '9y' })).status, 409);
+    await admin.send('PATCH', '/admin/vaccines/HPV-1', { status: 'inactive' });
+
+    const user = await env.db.one("SELECT id FROM users WHERE username = 'chew3'");
+    assert.equal((await admin.send('PATCH', `/admin/users/${user.id}`, { full_name: 'Kemi A. Afolabi', email: 'kemi@example.org' })).status, 200);
+    assert.equal((await env.db.one('SELECT full_name FROM users WHERE id = $1', [user.id])).full_name, 'Kemi A. Afolabi');
+  });
+
+  await t.test('searching other clinics is recorded in the audit trail', async () => {
+    await nurseB.get('/patients/search?q=Bello');
+    assert.ok(await env.db.one("SELECT 1 FROM audit_log WHERE action = 'patients.search_all_clinics' AND username = 'nurse2'"));
+  });
+
   await t.test('the daily cron endpoint requires the cron secret', async () => {
     assert.equal((await fetch(`${env.base}/cron/daily`)).status, 401);
     const ok = await fetch(`${env.base}/cron/daily`, { headers: { authorization: 'Bearer cron-secret' } });

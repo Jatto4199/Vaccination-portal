@@ -55,6 +55,59 @@ function VaccineEditor({ vaccine, onClose }) {
   );
 }
 
+const blankVaccine = { code: '', name: '', dose_number: '1', target: 'child', recommended_age: '', recommended_interval: '', min_age: '', max_age: '' };
+
+function NewVaccine({ onClose }) {
+  const [form, setForm] = useState(blankVaccine);
+  const [error, setError] = useState(null);
+  const set = (f) => (e) => setForm({ ...form, [f]: e.target.value });
+  const isChild = form.target === 'child';
+
+  async function save(e) {
+    e.preventDefault();
+    try {
+      await api('/admin/vaccines', { method: 'POST', body: { ...form, dose_number: Number(form.dose_number) } });
+      syncNow();
+      onClose(true);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <Modal title="Add vaccine dose" onClose={() => onClose(false)}>
+      <form className="stack" onSubmit={save}>
+        {error && <Alert kind="error">{error}</Alert>}
+        <p className="muted">
+          Add one row per dose. For a vaccine with several doses, add dose 1 first, then dose 2 with an interval.
+          Ages and intervals are written as 14d, 6w, 9m or 1y.
+        </p>
+        <div className="form-grid">
+          <Field label="Code" hint="Short code, e.g. HPV. Doses of one vaccine share a code."><input value={form.code} onChange={set('code')} autoFocus /></Field>
+          <Field label="Dose number"><input type="number" min="0" max="10" value={form.dose_number} onChange={set('dose_number')} /></Field>
+        </div>
+        <Field label="Vaccine name"><input value={form.name} onChange={set('name')} placeholder="e.g. Human Papillomavirus" /></Field>
+        <Field label="For">
+          <select value={form.target} onChange={set('target')}>
+            <option value="child">Children</option>
+            <option value="mother">Mothers</option>
+          </select>
+        </Field>
+        <div className="form-grid">
+          {isChild && <Field label="Recommended age"><input value={form.recommended_age} onChange={set('recommended_age')} placeholder="e.g. 9m" /></Field>}
+          <Field label="Interval after previous dose (optional)"><input value={form.recommended_interval} onChange={set('recommended_interval')} /></Field>
+          {isChild && <Field label="Minimum age (optional)" hint="Defaults to the recommended age"><input value={form.min_age} onChange={set('min_age')} /></Field>}
+          {isChild && <Field label="Maximum age (optional)"><input value={form.max_age} onChange={set('max_age')} /></Field>}
+        </div>
+        <div className="actions">
+          <button type="button" className="btn" onClick={() => onClose(false)}>Cancel</button>
+          <button className="btn btn-primary">Add vaccine</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function SettingsForm() {
   const remote = useRemote('/admin/settings');
   const [values, setValues] = useState(null);
@@ -100,6 +153,7 @@ function SettingsForm() {
 export default function Configuration() {
   const vaccines = useRemote('/admin/vaccines');
   const [editing, setEditing] = useState(null);
+  const [adding, setAdding] = useState(false);
 
   return (
     <div className="stack">
@@ -113,7 +167,10 @@ export default function Configuration() {
       {vaccines.error && <Alert kind="error">{vaccines.error}</Alert>}
       {!vaccines.data ? (!vaccines.error && <Loading />) : (
         <section className="card">
-          <h2>Vaccines</h2>
+          <div className="card-head">
+            <h2>Vaccines</h2>
+            <button className="btn btn-small" onClick={() => setAdding(true)}>+ Add vaccine</button>
+          </div>
           <table className="table">
             <thead><tr><th>Vaccine</th><th>Dose</th><th>For</th><th>Recommended age</th><th>Recommended interval</th><th>Min / max age</th><th>Status</th><th /></tr></thead>
             <tbody>
@@ -134,6 +191,7 @@ export default function Configuration() {
         </section>
       )}
       <SettingsForm />
+      {adding && <NewVaccine onClose={(changed) => { setAdding(false); if (changed) vaccines.reload(); }} />}
       {editing && <VaccineEditor vaccine={editing} onClose={(changed) => { setEditing(null); if (changed) vaccines.reload(); }} />}
     </div>
   );

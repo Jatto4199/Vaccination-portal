@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { describeAge } from '../../shared/index.js';
+import { describeAge, isActivePatient, PATIENT_STATUSES } from '../../shared/index.js';
 import { useClinicData, useOnline, useSession } from '../hooks.js';
 import { api } from '../api.js';
 import { importPatientBundle } from '../repo.js';
@@ -113,6 +113,7 @@ export default function Patients() {
                     <td>
                       <Link to={`/patients/${p.id}`}>{p.full_name}</Link>
                       {p.type === 'mother' && <span className="tag">mother</span>}
+                      {!isActivePatient(p) && <span className="tag">{PATIENT_STATUSES[p.status]?.toLowerCase() ?? p.status}</span>}
                       {data.unsynced.has(p.id) && <span className="tag">not synced</span>}
                     </td>
                     <td className="mono">{p.patient_number}</td>

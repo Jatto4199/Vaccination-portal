@@ -16,8 +16,7 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     if (!data) return null;
-    const active = new Set(data.patients.map((p) => p.id));
-    const patientsWith = (status) => new Set(data.schedules.filter((s) => s.status === status && active.has(s.patient_id)).map((s) => s.patient_id)).size;
+    const patientsWith = (status) => new Set(data.schedules.filter((s) => s.status === status && data.followUp.has(s.patient_id)).map((s) => s.patient_id)).size;
     const recent = data.records
       .filter((r) => r.record_status !== 'voided')
       .sort((a, b) => b.date_administered.localeCompare(a.date_administered) || (b.updated_at ?? '').localeCompare(a.updated_at ?? ''))

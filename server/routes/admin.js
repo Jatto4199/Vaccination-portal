@@ -39,8 +39,9 @@ export function adminRoutes({ sender }) {
     }
     const id = randomUUID();
     await req.db.tx(async (q) => {
-      await q.query(`INSERT INTO users (id, full_name, username, email, password_hash, role, clinic_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)`, [id, full_name.trim(), login, email?.trim() || null, hashPassword(password), role, clinic_id || null]);
+      // The user must choose their own password at first login.
+      await q.query(`INSERT INTO users (id, full_name, username, email, password_hash, role, clinic_id, must_change_password)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, true)`, [id, full_name.trim(), login, email?.trim() || null, hashPassword(password), role, clinic_id || null]);
       await audit(q, req, 'admin.user_created', 'users', id, { username: login, role });
     });
     res.status(201).json({ id });
@@ -49,18 +50,38 @@ export function adminRoutes({ sender }) {
   router.patch('/users/:id', async (req, res) => {
     const user = await req.db.one('SELECT * FROM users WHERE id = $1', [req.params.id]);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    const { account_status: status, role, clinic_id, password } = req.body ?? {};
+    const { account_status: status, role, clinic_id, password, full_name: fullName, email } = req.body ?? {};
     if (user.id === req.user.id && (status === 'disabled' || (role && role !== 'admin'))) {
       throw badRequest('You cannot disable or demote your own account');
     }
     if (role && !ROLES.includes(role)) throw badRequest('Invalid role');
     if (status && !['active', 'disabled'].includes(status)) throw badRequest('Invalid status');
     if (password !== undefined && password.length < 8) throw badRequest('Password must be at least 8 characters');
+    if (fullName !== undefined && !fullName.trim()) throw badRequest('Name is required');
+    if (email && !/^\S+@\S+\.\S+$/.test(email)) throw badRequest('Invalid email address');
+    if (email && await req.db.one('SELECT 1 FROM users WHERE lower(email) = lower($1) AND id != $2', [email, user.id])) {
+      return res.status(409).json({ error: 'Email already in use' });
+    }
+    const next = {
+      full_name: fullName !== undefined ? fullName.trim() : user.full_name,
+      email: email !== undefined ? email.trim() || null : user.email,
+      account_status: status ?? user.account_status,
+      role: role ?? user.role,
+      clinic_id: clinic_id !== undefined ? clinic_id || null : user.clinic_id,
+    };
+    if (next.role === 'health_worker' && !next.clinic_id) throw badRequest('Health workers must belong to a clinic');
     await req.db.tx(async (q) => {
-      await q.query('UPDATE users SET account_status = $1, role = $2, clinic_id = $3, password_hash = $4 WHERE id = $5', [
-        status ?? user.account_status, role ?? user.role, clinic_id !== undefined ? clinic_id || null : user.clinic_id,
-        password ? hashPassword(password) : user.password_hash, user.id]);
-      await audit(q, req, 'admin.user_updated', 'users', user.id, { account_status: status, role, clinic_id, password_reset: Boolean(password) });
+      await q.query(`UPDATE users SET full_name = $1, email = $2, account_status = $3, role = $4, clinic_id = $5 WHERE id = $6`,
+        [next.full_name, next.email, next.account_status, next.role, next.clinic_id, user.id]);
+      if (password) {
+        // A reset password is temporary: the user must change it at next login,
+        // and logins made with the old password stop working.
+        await q.query(`UPDATE users SET password_hash = $1, must_change_password = true, password_changed_at = $2,
+          failed_logins = 0, locked_until = NULL WHERE id = $3`, [hashPassword(password), nowISO(), user.id]);
+      }
+      await audit(q, req, 'admin.user_updated', 'users', user.id, {
+        full_name: fullName, email, account_status: status, role, clinic_id, password_reset: Boolean(password),
+      });
     });
     res.json({ ok: true });
   });
@@ -122,6 +143,59 @@ export function adminRoutes({ sender }) {
         status = $6 WHERE id = $7`, [next.name ?? vaccine.name, next.recommended_age, next.recommended_interval, next.min_age, next.max_age, next.status, vaccine.id]);
       await regenerateSchedules(q);
       await audit(q, req, 'admin.vaccine_updated', 'vaccines', vaccine.id, next);
+    });
+    res.json({ ok: true });
+  });
+
+  router.post('/vaccines', async (req, res) => {
+    const body = req.body ?? {};
+    const code = String(body.code ?? '').trim().toUpperCase();
+    const doseNumber = Number(body.dose_number);
+    const target = body.target;
+    if (!/^[A-Z0-9]{2,10}$/.test(code)) throw badRequest('Code must be 2-10 letters or digits, e.g. HPV');
+    if (!body.name?.trim()) throw badRequest('Name is required');
+    if (!Number.isInteger(doseNumber) || doseNumber < 0 || doseNumber > 10) throw badRequest('Dose number must be 0-10');
+    if (!['child', 'mother'].includes(target)) throw badRequest('Target must be child or mother');
+    const periods = Object.fromEntries(['recommended_age', 'recommended_interval', 'min_age', 'max_age']
+      .map((f) => [f, String(body[f] ?? '').trim() || null]));
+    for (const [f, v] of Object.entries(periods)) if (v && !PERIOD.test(v)) throw badRequest(`${f} must look like 6w, 9m, 14d or 1y`);
+    if (target === 'child' && !periods.recommended_age) throw badRequest('Child vaccines need a recommended age');
+    const id = `${code}-${doseNumber}`;
+    if (await req.db.one('SELECT 1 FROM vaccines WHERE id = $1 OR (code = $2 AND dose_number = $3 AND target = $4)',
+      [id, code, doseNumber, target])) {
+      return res.status(409).json({ error: `${code} dose ${doseNumber} already exists` });
+    }
+    await req.db.tx(async (q) => {
+      const { n } = await q.one('SELECT COALESCE(MAX(sort_order), 0)::int + 1 AS n FROM vaccines');
+      await q.query(`INSERT INTO vaccines (id, code, name, dose_number, target, recommended_age, recommended_interval,
+        min_age, max_age, sort_order, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')`, [
+        id, code, body.name.trim(), doseNumber, target, periods.recommended_age, periods.recommended_interval,
+        periods.min_age ?? periods.recommended_age, periods.max_age, n]);
+      await regenerateSchedules(q);
+      await audit(q, req, 'admin.vaccine_created', 'vaccines', id, { code, dose_number: doseNumber, target });
+    });
+    res.status(201).json({ id });
+  });
+
+  // ---- Patient transfer between clinics ----
+  // The patient's guardian and vaccination records are re-saved (new version)
+  // so the receiving clinic's devices pull them at their next sync.
+  router.post('/patients/:id/transfer', async (req, res) => {
+    const patient = await getRecord(req.db, 'patients', req.params.id);
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
+    const clinic = await req.db.one('SELECT * FROM clinics WHERE id = $1', [req.body?.clinic_id]);
+    if (!clinic) throw badRequest('Choose the receiving clinic');
+    if (clinic.id === patient.clinic_id) throw badRequest('The patient is already registered at this clinic');
+    const ctx = { user: req.user, nodeId: req.nodeId };
+    await req.db.tx(async (q) => {
+      await serverUpdate(q, ctx, 'patients', patient.id, { clinic_id: clinic.id });
+      if (patient.guardian_id && await getRecord(q, 'guardians', patient.guardian_id)) {
+        await serverUpdate(q, ctx, 'guardians', patient.guardian_id, {});
+      }
+      const records = await q.query('SELECT id FROM vaccination_records WHERE patient_id = $1', [patient.id]);
+      for (const r of records) await serverUpdate(q, ctx, 'vaccination_records', r.id, {});
+      await regenerateSchedules(q, [patient.id]);
+      await audit(q, req, 'admin.patient_transferred', 'patients', patient.id, { from: patient.clinic_id, to: clinic.id });
     });
     res.json({ ok: true });
   });

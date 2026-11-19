@@ -44,6 +44,7 @@ export default function Layout({ children }) {
           <SyncBadge />
           <div className="user">
             <span>{user.full_name}{offline && <em> (offline login)</em>}</span>
+            <NavLink className="btn-link" to="/account/password">Change password</NavLink>
             <button className="btn-link" onClick={() => logout()}>Log out</button>
           </div>
         </div>

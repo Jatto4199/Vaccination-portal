@@ -2,15 +2,19 @@
 // (thesis sections 3.7.1 and 3.16).
 import { useState } from 'react';
 import { Link, NavLink, useParams } from 'react-router-dom';
-import { describeAge, STATUS, todayISO, ACTIONABLE } from '../../shared/index.js';
+import { describeAge, STATUS, todayISO, ACTIONABLE, PATIENT_STATUSES, isActivePatient } from '../../shared/index.js';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db.js';
 import { useClinicData, useSession } from '../hooks.js';
-import { recordVaccination, voidVaccination } from '../repo.js';
+import { recordVaccination, voidVaccination, updateRecord } from '../repo.js';
+import { api, OfflineError } from '../api.js';
+import { syncNow } from '../sync.js';
 import { fmtDate, fmtDateTime, vaccineLabel, vaccineName } from '../format.js';
 import { Alert, Empty, Field, Loading, Modal, StatusChip } from '../components/ui.jsx';
 
 const RECORDABLE = new Set([STATUS.OVERDUE, STATUS.DUE, STATUS.UPCOMING, STATUS.SCHEDULED]);
+// Doses that can only be entered as given at another facility (from the card).
+const HISTORY_ONLY = new Set([STATUS.WAITING, STATUS.NOT_ELIGIBLE, STATUS.INACTIVE]);
 
 function usePatient() {
   const { id } = useParams();
@@ -45,6 +49,13 @@ function PatientShell({ ctx, children }) {
         </div>
         <Link className="btn" to={`/patients/${patient.id}/edit`}>Edit details</Link>
       </div>
+      {!isActivePatient(patient) && (
+        <Alert kind="warn">
+          {PATIENT_STATUSES[patient.status] ?? patient.status}
+          {patient.status_date && ` since ${fmtDate(patient.status_date)}`}
+          {patient.status_reason && ` (${patient.status_reason})`}. This patient is not followed up and receives no reminders.
+        </Alert>
+      )}
       {syncIssues.some((s) => s.conflict_status === 'pending_review') && (
         <Alert kind="warn">A change to this record conflicted with another clinic and is waiting for an administrator to review it.</Alert>
       )}
@@ -70,7 +81,94 @@ export function PatientProfile() {
   );
 }
 
+function StatusDialog({ patient, onClose }) {
+  const [status, setStatus] = useState(patient.status ?? 'active');
+  const [date, setDate] = useState(patient.status_date ?? todayISO());
+  const [reason, setReason] = useState(patient.status_reason ?? '');
+  const [error, setError] = useState(null);
+
+  async function save(e) {
+    e.preventDefault();
+    const active = status === 'active';
+    if (!active && (!date || date > todayISO())) return setError('Enter a date that is not in the future');
+    try {
+      await updateRecord('patients', {
+        id: patient.id, status, status_date: active ? null : date, status_reason: active ? null : reason.trim() || null,
+      });
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <Modal title="Patient status" onClose={onClose}>
+      <form className="stack" onSubmit={save}>
+        <p className="muted">Patients who are not active are removed from the due and overdue lists and get no SMS reminders. Their records are kept.</p>
+        {error && <Alert kind="error">{error}</Alert>}
+        <Field label="Status">
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            {Object.entries(PATIENT_STATUSES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </Field>
+        {status !== 'active' && (
+          <>
+            <Field label="Since"><input type="date" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} /></Field>
+            <Field label="Note (optional)"><input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Family moved to Lagos" /></Field>
+          </>
+        )}
+        <div className="actions">
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// Administrators move a patient to another clinic (online only).
+function TransferDialog({ patient, clinics, onClose }) {
+  const [clinicId, setClinicId] = useState('');
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save(e) {
+    e.preventDefault();
+    if (!clinicId) return setError('Choose the receiving clinic');
+    setBusy(true);
+    try {
+      await api(`/admin/patients/${patient.id}/transfer`, { method: 'POST', body: { clinic_id: clinicId } });
+      await syncNow();
+      onClose();
+    } catch (err) {
+      setError(err instanceof OfflineError ? 'Transferring a patient needs a connection to the server.' : err.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title={`Transfer ${patient.full_name}`} onClose={onClose}>
+      <form className="stack" onSubmit={save}>
+        <p className="muted">The receiving clinic gets the patient, guardian and vaccination history at its next sync and takes over follow-up.</p>
+        {error && <Alert kind="error">{error}</Alert>}
+        <Field label="Receiving clinic">
+          <select value={clinicId} onChange={(e) => setClinicId(e.target.value)}>
+            <option value="">Select…</option>
+            {[...clinics.values()].filter((c) => c.id !== patient.clinic_id).map((c) => <option key={c.id} value={c.id}>{c.code} · {c.name}</option>)}
+          </select>
+        </Field>
+        <div className="actions">
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" disabled={busy}>Transfer</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function ProfileBody({ patient, data, schedule, records }) {
+  const { user } = useSession();
+  const [dialog, setDialog] = useState(null);
   const guardian = data.guardians.get(patient.guardian_id);
   const mother = guardian?.patient_id && guardian.patient_id !== patient.id ? data.patientsById.get(guardian.patient_id) : null;
   const children = patient.type === 'mother' ? data.patients.filter((p) => p.type === 'child' && p.guardian_id === patient.guardian_id) : [];
@@ -88,7 +186,12 @@ function ProfileBody({ patient, data, schedule, records }) {
             <dt>Address</dt><dd>{patient.address || '—'}</dd>
             <dt>Registered</dt><dd>{fmtDate(patient.registration_date)}</dd>
             <dt>Clinic</dt><dd>{data.clinics.get(patient.clinic_id)?.name ?? 'Another clinic'}</dd>
+            <dt>Status</dt><dd>{PATIENT_STATUSES[patient.status ?? 'active']}</dd>
           </dl>
+          <div className="actions start">
+            <button className="btn btn-small" onClick={() => setDialog('status')}>Change status</button>
+            {user.role === 'admin' && <button className="btn btn-small" onClick={() => setDialog('transfer')}>Transfer to another clinic</button>}
+          </div>
         </section>
         <section className="card">
           <h2>{patient.type === 'child' ? 'Guardian details' : 'Contact details'}</h2>
@@ -127,6 +230,8 @@ function ProfileBody({ patient, data, schedule, records }) {
         )}
         <Link className="btn" to={`/patients/${patient.id}/schedule`}>Open full schedule</Link>
       </section>
+      {dialog === 'status' && <StatusDialog patient={patient} onClose={() => setDialog(null)} />}
+      {dialog === 'transfer' && <TransferDialog patient={patient} clinics={data.clinics} onClose={() => setDialog(null)} />}
     </>
   );
 }
@@ -134,6 +239,9 @@ function ProfileBody({ patient, data, schedule, records }) {
 function RecordDose({ patient, row, vaccine, onClose }) {
   const [date, setDate] = useState(todayISO());
   const [batch, setBatch] = useState('');
+  const historyOnly = HISTORY_ONLY.has(row.status);
+  const [elsewhere, setElsewhere] = useState(historyOnly);
+  const [facility, setFacility] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const tooEarly = row.earliest_date && date < row.earliest_date;
@@ -144,7 +252,10 @@ function RecordDose({ patient, row, vaccine, onClose }) {
     if (patient.dob && date < patient.dob) return setError('The date cannot be before the date of birth');
     setBusy(true);
     try {
-      await recordVaccination({ patientId: patient.id, vaccine, dateAdministered: date, batchNumber: batch.trim() });
+      await recordVaccination({
+        patientId: patient.id, vaccine, dateAdministered: date, batchNumber: batch.trim(),
+        givenElsewhere: elsewhere, facilityName: facility.trim(),
+      });
       onClose();
     } catch (err) {
       setError(err.message);
@@ -158,6 +269,11 @@ function RecordDose({ patient, row, vaccine, onClose }) {
         <p className="muted">Patient: <strong>{patient.full_name}</strong> · Expected {fmtDate(row.expected_due_date)}</p>
         {error && <Alert kind="error">{error}</Alert>}
         <Field label="Date administered"><input type="date" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} /></Field>
+        <label className="check">
+          <input type="checkbox" checked={elsewhere} disabled={historyOnly} onChange={(e) => setElsewhere(e.target.checked)} />
+          Given at another facility (copied from the child health card)
+        </label>
+        {elsewhere && <Field label="Facility (optional)"><input value={facility} onChange={(e) => setFacility(e.target.value)} placeholder="e.g. General Hospital Ilorin" /></Field>}
         <Field label="Batch / lot number (optional)"><input value={batch} onChange={(e) => setBatch(e.target.value)} /></Field>
         {tooEarly && (
           <Alert kind="warn">
@@ -198,7 +314,7 @@ export function PatientSchedule() {
                     <td>{row.status === STATUS.WAITING ? <span className="muted">after {row.waiting_for}</span> : fmtDate(row.expected_due_date)}</td>
                     <td><StatusChip status={row.status} />{row.early && <span className="tag tag-warn" title="Given before the minimum age or interval">early</span>}</td>
                     <td>{fmtDate(row.actual_administration_date)}</td>
-                    <td>{canRecord && vaccine && RECORDABLE.has(row.status) && <button className="btn btn-small" onClick={() => setRecording({ row, vaccine })}>Record</button>}</td>
+                    <td>{canRecord && vaccine && row.status !== STATUS.COMPLETED && <button className="btn btn-small" onClick={() => setRecording({ row, vaccine })}>{RECORDABLE.has(row.status) && isActivePatient(patient) ? 'Record' : 'Add from card'}</button>}</td>
                   </tr>
                 );
               })}
@@ -263,8 +379,8 @@ export function PatientHistory() {
                     <td>{fmtDate(r.date_administered)}</td>
                     <td>{vaccineName(data.vaccines, r.vaccine_id)}</td>
                     <td>{r.dose_number}</td>
-                    <td>{data.clinics.get(r.clinic_id)?.code ?? '—'}</td>
-                    <td>{r.administered_by_name ?? '—'}</td>
+                    <td>{r.given_elsewhere ? <span title="Given at another facility">Elsewhere{r.facility_name ? `: ${r.facility_name}` : ''}</span> : data.clinics.get(r.clinic_id)?.code ?? '—'}</td>
+                    <td>{r.given_elsewhere ? <span className="muted">from card</span> : r.administered_by_name ?? '—'}</td>
                     <td>{r.batch_number ?? '—'}</td>
                     <td>
                       {r.record_status === 'voided'

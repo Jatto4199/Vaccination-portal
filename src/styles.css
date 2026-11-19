@@ -144,7 +144,7 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: 0
 .chip-due { background: #e0ebfd; color: #1e4fb8; }
 .chip-upcoming { background: #eef1f4; color: #334155; }
 .chip-scheduled { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-.chip-waiting, .chip-not_eligible { background: transparent; color: var(--muted); }
+.chip-waiting, .chip-not_eligible, .chip-inactive { background: transparent; color: var(--muted); }
 .tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: #eef1f4; color: var(--muted); font-size: 0.78rem; text-decoration: none; }
 .tag-warn { background: var(--warn-soft); color: var(--warn); }
 

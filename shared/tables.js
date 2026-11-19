@@ -25,13 +25,14 @@ export const SYNC_TABLES = {
   },
   patients: {
     fields: ['patient_number', 'type', 'full_name', 'dob', 'sex', 'address', 'guardian_id',
-      'clinic_id', 'registration_date', 'registered_by', 'merged_into_id'],
+      'clinic_id', 'registration_date', 'registered_by', 'merged_into_id',
+      'status', 'status_date', 'status_reason'],
     critical: ['type', 'dob', 'sex'],
     clinicField: 'clinic_id',
   },
   vaccination_records: {
     fields: ['patient_id', 'vaccine_id', 'dose_number', 'date_administered', 'administered_by', 'administered_by_name',
-      'clinic_id', 'batch_number', 'record_status', 'void_reason', 'voided_by', 'voided_at'],
+      'clinic_id', 'batch_number', 'given_elsewhere', 'facility_name', 'record_status', 'void_reason', 'voided_by', 'voided_at'],
     critical: [],
     appendOnly: true,
     mutable: ['record_status', 'void_reason', 'voided_by', 'voided_at'],

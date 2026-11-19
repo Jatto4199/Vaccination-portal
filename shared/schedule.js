@@ -25,6 +25,7 @@ export const STATUS = {
   SCHEDULED: 'scheduled',
   WAITING: 'waiting',
   NOT_ELIGIBLE: 'not_eligible',
+  INACTIVE: 'inactive',
 };
 
 export const STATUS_LABELS = {
@@ -35,7 +36,20 @@ export const STATUS_LABELS = {
   scheduled: 'Scheduled',
   waiting: 'Waiting for previous dose',
   not_eligible: 'Not eligible (age limit passed)',
+  inactive: 'Not followed up (patient inactive)',
 };
+
+// Patient status. Anything other than "active" stops follow-up: outstanding
+// doses get the "inactive" status, so they leave the due/overdue lists and no
+// reminders are sent. A missing status (older records) means active.
+export const PATIENT_STATUSES = {
+  active: 'Active',
+  moved_away: 'Moved away',
+  lost_to_follow_up: 'Lost to follow-up',
+  deceased: 'Deceased',
+};
+
+export const isActivePatient = (patient) => !patient.status || patient.status === 'active';
 
 // Statuses that need follow-up by the clinic.
 export const ACTIONABLE = [STATUS.OVERDUE, STATUS.DUE, STATUS.UPCOMING];
@@ -102,6 +116,8 @@ export function computeSchedule(patient, records, vaccines, options = {}) {
         item.early = Boolean(earliest) && record.date_administered < earliest;
         prevDate = record.date_administered;
         pendingPrev = null;
+      } else if (!isActivePatient(patient)) {
+        item.status = STATUS.INACTIVE;
       } else if (lastEligible && today > lastEligible) {
         item.status = STATUS.NOT_ELIGIBLE;
       } else if (pendingPrev) {

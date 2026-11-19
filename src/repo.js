@@ -130,12 +130,17 @@ export async function updateRecord(table, values) {
   return id;
 }
 
-export async function recordVaccination({ patientId, vaccine, dateAdministered, batchNumber }) {
+// givenElsewhere: a dose given at another facility, copied from the child
+// health card. It counts for the schedule and coverage but not as a dose
+// given by this clinic. The record still belongs to this clinic (it entered it).
+export async function recordVaccination({ patientId, vaccine, dateAdministered, batchNumber, givenElsewhere = false, facilityName }) {
   const ctx = await context();
   if (!ctx.user.clinic_id) throw new Error('Only clinic staff can record vaccinations');
   const id = await db.transaction('rw', writeTables(), () => saveRecord('vaccination_records', {
     patient_id: patientId, vaccine_id: vaccine.id, dose_number: vaccine.dose_number, date_administered: dateAdministered,
-    batch_number: batchNumber || null, administered_by: ctx.user.id, administered_by_name: ctx.user.full_name,
+    batch_number: batchNumber || null,
+    administered_by: givenElsewhere ? null : ctx.user.id, administered_by_name: givenElsewhere ? null : ctx.user.full_name,
+    given_elsewhere: givenElsewhere, facility_name: givenElsewhere ? facilityName || null : null,
     clinic_id: ctx.user.clinic_id, record_status: 'valid',
   }, ctx));
   await afterWrite([patientId]);

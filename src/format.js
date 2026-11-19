@@ -39,3 +39,17 @@ export function vaccineLabel(vaccines, id) {
 
 export const isValidPhone = (phone) => /^\+?\d{7,15}$/.test(phone.replace(/[\s-]/g, ''));
 export const cleanPhone = (phone) => phone.replace(/[\s-]/g, '');
+
+// Downloads rows (arrays of values, first row = headings) as a CSV file that
+// opens in Excel or Google Sheets.
+export function downloadCsv(filename, rows) {
+  const cell = (v) => {
+    const text = v === null || v === undefined ? '' : String(v);
+    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const csv = rows.map((r) => r.map(cell).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

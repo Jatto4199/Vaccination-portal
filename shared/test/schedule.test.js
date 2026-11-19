@@ -70,6 +70,14 @@ test('maternal Td is scheduled from registration and by interval', () => {
   assert.equal(find(withTd1, 'TD-2').expected_due_date, '2026-03-29');
 });
 
+test('an inactive patient has no outstanding doses to follow up', () => {
+  const moved = { ...child, status: 'moved_away' };
+  const items = computeSchedule(moved, [rec('BCG-1', '2026-01-03')], V, { today: '2026-04-01' });
+  assert.equal(find(items, 'BCG-1').status, STATUS.COMPLETED);
+  assert.ok(items.filter((i) => i.vaccine_id !== 'BCG-1').every((i) => i.status === STATUS.INACTIVE));
+  assert.equal(find(computeSchedule({ ...child, status: 'active' }, [], V, { today: '2026-04-01' }), 'PENTA-1').status, STATUS.OVERDUE);
+});
+
 test('schedule rows carry the Vaccination Schedule attributes', () => {
   const [row] = toScheduleRows(computeSchedule(child, [rec('BCG-1', '2026-01-03')], V, { today: '2026-01-05' }), 'now');
   assert.deepEqual(

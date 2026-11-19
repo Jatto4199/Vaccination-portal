@@ -284,9 +284,30 @@ CREATE TABLE IF NOT EXISTS counters (
 INSERT INTO counters (name, value) VALUES ('server_seq', 0) ON CONFLICT DO NOTHING;
 `;
 
+// Columns added after the first version. ADD COLUMN IF NOT EXISTS upgrades
+// existing databases in place when the server starts.
+const MIGRATIONS = `
+-- Accounts: forced change of temporary passwords, login lockout, and
+-- invalidating older login tokens when the password changes.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_logins INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+
+-- Patient status (active, moved away, lost to follow-up, deceased). NULL = active.
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS status_date DATE;
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS status_reason TEXT;
+
+-- Doses given at another facility, entered from the child health card.
+ALTER TABLE vaccination_records ADD COLUMN IF NOT EXISTS given_elsewhere BOOLEAN;
+ALTER TABLE vaccination_records ADD COLUMN IF NOT EXISTS facility_name TEXT;
+`;
+
 export async function openDatabase({ url = process.env.DATABASE_URL, dataDir } = {}) {
   const db = url ? await connectPg(url) : await connectPglite(dataDir);
   await db.exec(SCHEMA);
+  await db.exec(MIGRATIONS);
   await seedReferenceData(db);
   return db;
 }

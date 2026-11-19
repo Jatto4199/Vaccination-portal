@@ -2,14 +2,51 @@ import { useState } from 'react';
 import { api } from '../../api.js';
 import { loadConfig } from '../../config.js';
 import { timeAgo } from '../../format.js';
-import { Alert, Field, Loading } from '../../components/ui.jsx';
+import { Alert, Field, Loading, Modal } from '../../components/ui.jsx';
 import { useRemote } from './useRemote.js';
 
 const SYNC_LABELS = { never_synced: 'Never synced', synced: 'Synced', failed: 'Last sync had errors' };
 const blank = { code: '', name: '', location: '', contact_phone: '', contact_email: '' };
 
+function EditClinic({ clinic, onDone }) {
+  const [form, setForm] = useState({
+    name: clinic.name, location: clinic.location ?? '', contact_phone: clinic.contact_phone ?? '', contact_email: clinic.contact_email ?? '',
+  });
+  const [error, setError] = useState(null);
+  const set = (f) => (e) => setForm({ ...form, [f]: e.target.value });
+
+  async function submit(e) {
+    e.preventDefault();
+    try {
+      await api(`/admin/clinics/${clinic.id}`, { method: 'PATCH', body: form });
+      loadConfig();
+      onDone();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <Modal title={`Edit ${clinic.code}`} onClose={onDone}>
+      <form className="stack" onSubmit={submit}>
+        {error && <Alert kind="error">{error}</Alert>}
+        <p className="muted">The code ({clinic.code}) is part of patient numbers and cannot be changed.</p>
+        <Field label="Clinic name"><input value={form.name} onChange={set('name')} autoFocus /></Field>
+        <Field label="Location"><input value={form.location} onChange={set('location')} /></Field>
+        <Field label="Contact phone"><input type="tel" value={form.contact_phone} onChange={set('contact_phone')} /></Field>
+        <Field label="Contact email"><input type="email" value={form.contact_email} onChange={set('contact_email')} /></Field>
+        <div className="actions">
+          <button type="button" className="btn" onClick={onDone}>Cancel</button>
+          <button className="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export default function Clinics() {
   const clinics = useRemote('/admin/clinics');
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(blank);
   const [error, setError] = useState(null);
   const set = (f) => (e) => setForm({ ...form, [f]: e.target.value });
@@ -38,7 +75,7 @@ export default function Clinics() {
       </div>
       <section className="card">
         <table className="table">
-          <thead><tr><th>Code</th><th>Clinic</th><th>Contact</th><th>Node identifier</th><th className="num">Patients</th><th className="num">Staff</th><th>Synchronization status</th></tr></thead>
+          <thead><tr><th>Code</th><th>Clinic</th><th>Contact</th><th>Node identifier</th><th className="num">Patients</th><th className="num">Staff</th><th>Synchronization status</th><th /></tr></thead>
           <tbody>
             {clinics.data.clinics.map((c) => (
               <tr key={c.id}>
@@ -52,6 +89,7 @@ export default function Clinics() {
                   <span className={`tag tag-${c.sync_status}`}>{SYNC_LABELS[c.sync_status]}</span>
                   <div className="muted small">{c.last_sync_at ? `last ${timeAgo(c.last_sync_at)}` : ''}</div>
                 </td>
+                <td><button className="btn-link" onClick={() => setEditing(c)}>Edit</button></td>
               </tr>
             ))}
           </tbody>
@@ -69,6 +107,7 @@ export default function Clinics() {
         </div>
         <div className="actions"><button className="btn btn-primary">Add clinic</button></div>
       </form>
+      {editing && <EditClinic clinic={editing} onDone={() => { setEditing(null); clinics.reload(); }} />}
     </div>
   );
 }

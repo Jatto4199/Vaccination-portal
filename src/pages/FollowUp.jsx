@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { diffDays, STATUS, todayISO } from '../../shared/index.js';
 import { useClinicData } from '../hooks.js';
-import { fmtDate, vaccineLabel } from '../format.js';
+import { downloadCsv, fmtDate, vaccineLabel } from '../format.js';
 import { Empty, Loading } from '../components/ui.jsx';
 
 const KINDS = {
@@ -35,7 +35,7 @@ export default function FollowUp({ kind }) {
       if (kind === 'upcoming' && filter !== 'all' && s.status !== filter) continue;
       if (kind === 'overdue' && filter !== 'all' && diffDays(s.expected_due_date, today) <= Number(filter)) continue;
       const patient = data.patientsById.get(s.patient_id);
-      if (!patient || patient.merged_into_id) continue;
+      if (!patient || !data.followUp.has(patient.id)) continue;
       if (!byPatient.has(patient.id)) byPatient.set(patient.id, { patient, items: [] });
       byPatient.get(patient.id).items.push(s);
     }
@@ -46,6 +46,15 @@ export default function FollowUp({ kind }) {
 
   if (!data) return <Loading />;
 
+  const exportCsv = () => downloadCsv(`${kind}-${today}.csv`, [
+    ['Patient number', 'Patient', 'Vaccines needed', 'Due date', 'Days', 'Guardian', 'Phone'],
+    ...rows.map(({ patient, items, due }) => {
+      const g = data.guardians.get(patient.guardian_id);
+      return [patient.patient_number, patient.full_name, items.map((i) => vaccineLabel(data.vaccines, i.vaccine_id)).join('; '),
+        due, diffDays(today, due), g && g.patient_id !== patient.id ? g.full_name : '', g?.phone ?? ''];
+    }),
+  ]);
+
   return (
     <div className="stack">
       <div className="page-head">
@@ -53,7 +62,10 @@ export default function FollowUp({ kind }) {
           <h1>{config.title}</h1>
           <p className="muted">{config.intro}</p>
         </div>
-        <button className="btn" onClick={() => window.print()}>Print list</button>
+        <div className="actions">
+          <button className="btn" onClick={exportCsv} disabled={!rows.length}>Download CSV</button>
+          <button className="btn" onClick={() => window.print()}>Print list</button>
+        </div>
       </div>
       <div className="segmented">
         {config.filters.map(([value, label]) => (
